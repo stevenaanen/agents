@@ -5,21 +5,36 @@ description: Process Jenius s-Card transaction emails in ssaanen@gmail.com inbox
 
 # Jenius s-Card Processor
 
+Scans Monica's Jenius s-Card transaction notifications and classifies them as
+living expenses (ignore) or reimbursable (track for later). Inbox-only search
+means already-processed emails are naturally excluded (they get archived).
+
 ```bash
 spark search "s-Card Credit Card Transaction" --in ssaanen@gmail.com:Inbox
 ```
 
-For each result, parse: `ID`, `Merchant:`, `Total: IDR`, `Transaction date & time:`. For each, run silently:
+For each result, parse: `ID`, `Merchant:`, `Total: IDR`, `Transaction date & time:`.
 
-1. **Amount < 200,000** → checked + archive
-2. **Amount ≥ 200,000, merchant in `trusted-merchants.json`** (partial case-insensitive) → checked + archive
-3. **Amount ≥ 200,000, merchant NOT trusted** → append to `data/pending-jenius-transactions.json`, then checked + archive
+## Classification (run silently per email)
+
+| Condition | Action |
+|-----------|--------|
+| Amount < IDR 200,000 | living expense → checked + archive |
+| Amount ≥ 200,000, merchant in `trusted-merchants.json` | trusted spend → checked + archive |
+| Amount ≥ 200,000, merchant NOT trusted | unknown → append to `data/pending-jenius-transactions.json`, then checked + archive |
+
+Trusted merchant matching is partial + case-insensitive against `merchants[]`.
 
 ```bash
 spark action attachLabel <id> --folder "ssaanen@gmail.com:checked"
 spark action archive <id>
 ```
 
-Pending entry shape: `{ email_id, merchant, amount_idr, date, processed_at }`
+Unknown merchant entry: `{ email_id, merchant, amount_idr, date, processed_at }`
 
-When done, output one line: `Processed X: Y checked, Z pending`
+The pending file accumulates unknowns for a separate reimbursement review step
+(not built yet). Everything still gets archived + checked so the inbox stays clean.
+
+## Output
+
+One line when done: `Processed X: Y checked, Z pending`
