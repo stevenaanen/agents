@@ -38,7 +38,7 @@ info "Registering skills..."
 
 mkdir -p .claude/skills
 
-for skill in jenius jenius-card jenius-review telegram use-spark; do
+for skill in jenius jenius-card jenius-review telegram use-spark brew-maintenance; do
   link=".claude/skills/$skill"
   target="../../skills/$skill"
   if [[ -L "$link" ]]; then
