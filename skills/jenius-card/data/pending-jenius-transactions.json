@@ -6,4 +6,12 @@
     "date": "14 MAY 2026 10:32:35 WIB",
     "processed_at": "2026-05-15"
   }
+  ,
+  {
+    "email_id": "231113",
+    "merchant": "SURF BREW TABANAN KOT. ID",
+    "amount_idr": 213675,
+    "date": "15 MAY 2026 18:13:19 WIB",
+    "processed_at": "2026-05-15"
+  }
 ]

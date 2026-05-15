@@ -32,8 +32,8 @@ spark action archive <id>
 
 Unknown merchant entry: `{ email_id, merchant, amount_idr, date, processed_at }`
 
-The pending file accumulates unknowns for a separate reimbursement review step
-(not built yet). Everything still gets archived + checked so the inbox stays clean.
+The pending file accumulates unknowns for `/jenius-review`, which prompts via
+Telegram and routes each to reimbursements or trusted-merchants.
 
 ## Output
 
