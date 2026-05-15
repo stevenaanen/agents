@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.steven.jenius</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>/Users/steven/git/agents/scripts/run-jenius.sh</string>
+    </array>
+
+    <!-- Run daily at 09:00 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Also run on login/boot (catches days where laptop was off at 09:00) -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/steven/Library/Logs/claude-agents/jenius.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/steven/Library/Logs/claude-agents/jenius.log</string>
+</dict>
+</plist>
