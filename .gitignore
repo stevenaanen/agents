@@ -1,0 +1,39 @@
+# Environment
+.env
+.env.*
+!.env.example
+*.secret
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.python-version
+dist/
+*.egg-info/
+
+# Node
+node_modules/
+.npm/
+*.log
+
+# Outputs / artifacts
+output/
+tmp/
+.tmp/
+*.tmp
+
+# Claude Code
+.claude/settings.local.json
