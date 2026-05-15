@@ -16,9 +16,7 @@ Processes Jenius s-Card transaction notification emails from ssaanen@gmail.com.
 Before this workflow can label or archive, the account needs **triage** access:
 - Open Spark Desktop → Settings → AI Agents → ssaanen@gmail.com → set to **Triage**
 
-Gmail labels must also exist. Create them at mail.google.com → Labels if missing:
-- `checked`
-- `to-reimburse`
+A Gmail label `checked` must exist in ssaanen@gmail.com. Create it at mail.google.com → Labels if missing.
 
 ## Execution
 
@@ -73,21 +71,24 @@ Move to the next email.
 
 **Merchant is NOT trusted:**
 
-```bash
-spark action attachLabel <id> --folder "ssaanen@gmail.com:to-reimburse"
-spark action archive <id>
+Append an entry to `skills/jenius-card/data/pending-jenius-transactions.json`:
+
+```json
+{
+  "email_id": "<spark message id>",
+  "merchant": "<full merchant name from email>",
+  "amount_idr": <integer amount>,
+  "date": "<transaction date & time string>",
+  "processed_at": "<today's date ISO 8601>"
+}
 ```
 
-Then inform the user:
+Then label as checked and archive (same as trusted — the email is done, the transaction is pending):
 
-> ⚠️ **Reimbursable transaction flagged**
-> - Merchant: [merchant name]
-> - Amount: IDR [amount formatted with thousand separators]
-> - Date: [date]
-
-Ask: **"Should [MERCHANT] be added to the trusted merchants list for future transactions? (yes/no)"**
-
-If yes: add the merchant name (without location suffix — use just the first meaningful segment before any location codes) to `merchants[]` in `skills/jenius-card/trusted-merchants.json`, save the file.
+```bash
+spark action attachLabel <id> --folder "ssaanen@gmail.com:checked"
+spark action archive <id>
+```
 
 ### Step 4 — Summary
 
@@ -96,18 +97,12 @@ After processing all emails, output a compact summary:
 ```
 Processed X transaction(s):
   ✓ Y checked (living expenses / trusted merchants)
-  ⚠ Z flagged for reimbursement:
+  ⚠ Z pending reimbursement review:
       - [MERCHANT] · IDR [amount] · [date]
       - ...
 ```
 
-If the trusted-merchants list was updated, mention it.
+## Notes
 
-## Merchant name normalization
-
-When adding to the trusted list, strip trailing location noise. Jenius appends city/region codes to merchant names:
-- `SHAKE UP! BADUNG (KAB) ID` → store `SHAKE UP!`
-- `INDOMARET CANGGU HO BADUNG ID` → store `INDOMARET`
-- `MAI MAIN CANGGU HO BADUNG ID` → store `MAI MAIN`
-
-Use your judgment on where the merchant name ends and the location starts.
+- The `data/pending-jenius-transactions.json` file accumulates all unknown-merchant transactions for later review and reimbursement processing.
+- Trusted merchant matching is partial and case-insensitive: `"MAI MAIN RESTO"` matches `"MAI MAIN CANGGU RESTO BADUNG ID"`. Add the shortest unambiguous prefix to `trusted-merchants.json`.
