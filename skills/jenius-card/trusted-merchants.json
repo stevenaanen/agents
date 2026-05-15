@@ -2,6 +2,8 @@
   "_note": "Partial case-insensitive matching. 'INDOMARET' matches 'INDOMARET CANGGU ID'. Add merchants here when prompted by the jenius-card workflow.",
   "merchants": [
     "MAI MAIN RESTO",
-    "SURF BREW"
+    "SURF BREW",
+    "GOPAYID",
+    "HOIAN BY MEVUI"
   ]
 }
