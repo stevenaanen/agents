@@ -14,7 +14,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_DIR="$HOME/Library/Logs/claude-agents"
 LOG_FILE="$LOG_DIR/brew-maintenance.log"
 TELEGRAM="python3 $REPO_DIR/skills/telegram/telegram.py"
-EPOCH_MIN=946684800  # 2000-01-01 — skip bogus atime=0 values
+EPOCH_MIN=946684800  # 2000-01-01 — skip bogus atime values (e.g. epoch-0 on Cursor)
 
 mkdir -p "$LOG_DIR"
 
@@ -97,39 +97,13 @@ fi
 
 # ── Phase 3: Stale package detection ──────────────────────────────────────────
 
-log "Identifying stale packages (threshold: 180 days)..."
+log "Identifying stale casks (threshold: 180 days)..."
 
 NOW=$(date +%s)
-STALE_THRESHOLD=$((180 * 86400))
 MANUALLY_REMOVED=0
-
-# Returns the last-accessed Unix timestamp for a formula.
-# Checks the binary in /opt/homebrew/bin first, then the opt directory.
-formula_atime() {
-  local formula=$1
-  local bin_path="/opt/homebrew/bin/$formula"
-  local opt_path="/opt/homebrew/opt/$formula"
-  if [[ -e "$bin_path" ]]; then
-    stat -f "%a" "$bin_path" 2>/dev/null || echo 0
-  elif [[ -e "$opt_path" ]]; then
-    stat -f "%a" "$opt_path" 2>/dev/null || echo 0
-  else
-    echo 0
-  fi
-}
 
 # Collect stale items as "name|date|age_days|type" strings
 typeset -a stale_items
-
-while IFS= read -r formula; do
-  atime=$(formula_atime "$formula")
-  (( atime < EPOCH_MIN )) && continue
-  age=$(( (NOW - atime) / 86400 ))
-  if (( age > 180 )); then
-    date_str=$(date -r "$atime" "+%Y-%m-%d")
-    stale_items+=("${formula}|${date_str}|${age}|formula")
-  fi
-done < <(brew leaves --installed-on-request 2>/dev/null)
 
 while IFS= read -r cask; do
   app=$(brew info --cask --json=v2 "$cask" 2>/dev/null | python3 -c \
@@ -211,7 +185,7 @@ if $DRY_RUN; then
   printf "Autoremove:  %s package(s)\n" "$AUTOREMOVED"
   printf "Cleanup:     %s freed\n" "${CLEANUP_FREED:-0 B}"
   printf "Warnings:    %s\n" "$WARNINGS"
-  printf "Stale:       %s package(s) would be prompted for review\n" "$STALE_COUNT"
+  printf "Stale casks: %s would be prompted for review\n" "$STALE_COUNT"
 else
   if (( WARNINGS == 0 )); then
     WARNINGS_LINE="✅ No doctor warnings"
