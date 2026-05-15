@@ -20,9 +20,13 @@ As `skills/` grows, organize by domain subdirectory (e.g., `skills/git/`, `skill
 
 ## Skills
 
-Skills are Markdown files that Claude Code loads and executes when the user types `/<skill-name>`. Name the file to match the intended slash command (e.g., `skills/review.md` → `/review`).
+Skills are Markdown files that Claude Code loads and executes when the user types `/<skill-name>`. Each skill lives in `skills/<name>/SKILL.md` (the data/config files for that skill sit alongside it in the same directory).
 
-Register skills in `.claude/settings.json` under the `skills` key pointing to the file path.
+To make a skill available as a slash command, create a symlink in `.claude/skills/`:
+```bash
+ln -s ../../skills/<name> .claude/skills/<name>
+```
+The directory name under `.claude/skills/` becomes the slash command name (`/name`). A session restart is required if `.claude/skills/` was created mid-session.
 
 ## Conventions
 
