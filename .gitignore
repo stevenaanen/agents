@@ -29,6 +29,9 @@ node_modules/
 .npm/
 *.log
 
+# Skill runtime data (personal transaction records, etc.)
+skills/*/data/
+
 # Outputs / artifacts
 output/
 tmp/
