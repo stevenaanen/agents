@@ -20,7 +20,7 @@ so the user can tap a button to send a structured reply back to the workflow.
 ## Send a message
 
 ```bash
-python skills/telegram/telegram.py send "Your message here"
+python3 skills/telegram/telegram.py send "Your message here"
 # → prints message_id
 ```
 
@@ -29,7 +29,7 @@ Supports Markdown: `*bold*`, `_italic_`, `` `code` ``
 ## Send with inline keyboard
 
 ```bash
-python skills/telegram/telegram.py send "Approve transaction?" \
+python3 skills/telegram/telegram.py send "Approve transaction?" \
   --keyboard '[["Yes:yes", "No:no"], ["Remind me later:later"]]'
 # → prints message_id
 ```
@@ -40,7 +40,7 @@ Each inner array is one row of buttons. If no `:` is present, label = callback_d
 ## Wait for a button tap
 
 ```bash
-python skills/telegram/telegram.py wait --message-id <id> --timeout 120
+python3 skills/telegram/telegram.py wait --message-id <id> --timeout 120
 # → prints callback_data (e.g. "yes"), or exits 1 on timeout
 ```
 
@@ -50,8 +50,8 @@ python skills/telegram/telegram.py wait --message-id <id> --timeout 120
 ## Typical pattern in a workflow
 
 ```bash
-MSG_ID=$(python skills/telegram/telegram.py send "Do X?" \
+MSG_ID=$(python3 skills/telegram/telegram.py send "Do X?" \
   --keyboard '[["Do it:yes", "Skip:no"]]')
-REPLY=$(python skills/telegram/telegram.py wait --message-id "$MSG_ID" --timeout 120)
+REPLY=$(python3 skills/telegram/telegram.py wait --message-id "$MSG_ID" --timeout 120)
 # $REPLY is "yes" or "no"
 ```
