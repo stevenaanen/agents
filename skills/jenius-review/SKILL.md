@@ -50,6 +50,15 @@ Use the shortest prefix that uniquely identifies the merchant.
 After processing all entries, write the updated (empty) array back to
 `pending-jenius-transactions.json`.
 
+Then read `reimbursements.json` to get the total count and send a closing
+Telegram message (no keyboard):
+
+```
+✅ *Review complete*
+X reviewed: Y reimbursable, Z skipped, W always ignored
+💰 [total] transaction(s) total pending reimbursement
+```
+
 ## Output
 
 One line: `Reviewed X: Y reimbursable, Z skipped, W always ignored`

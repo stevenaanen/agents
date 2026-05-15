@@ -1,16 +1,20 @@
 ---
 name: jenius-card
-description: Process Jenius s-Card transaction emails in ssaanen@gmail.com inbox. Labels and archives each email; saves unknown merchants to pending file.
+description: Process Jenius s-Card and d-Card transaction emails in ssaanen@gmail.com inbox. Labels and archives each email; saves unknown merchants to pending file.
 ---
 
-# Jenius s-Card Processor
+# Jenius Card Processor
 
-Scans Monica's Jenius s-Card transaction notifications and classifies them as
-living expenses (ignore) or reimbursable (track for later). Inbox-only search
-means already-processed emails are naturally excluded (they get archived).
+Scans Monica's Jenius credit card transaction notifications (both s-Card and
+d-Card) and classifies them as living expenses (ignore) or reimbursable (track
+for later). Inbox-only search means already-processed emails are naturally
+excluded (they get archived).
+
+Run both searches and combine results, deduplicating by ID:
 
 ```bash
 spark search "s-Card Credit Card Transaction" --in ssaanen@gmail.com:Inbox
+spark search "d-Card Credit Card Transaction" --in ssaanen@gmail.com:Inbox
 ```
 
 For each result, parse: `ID`, `Merchant:`, `Total: IDR`, `Transaction date & time:`.
