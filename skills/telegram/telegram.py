@@ -74,6 +74,12 @@ def cmd_wait(token, message_id=None, timeout=300):
                 continue
             if message_id is None or cq["message"]["message_id"] == message_id:
                 api(token, "answerCallbackQuery", {"callback_query_id": cq["id"]})
+                # Remove buttons so the user sees their tap was received
+                api(token, "editMessageReplyMarkup", {
+                    "chat_id": cq["message"]["chat"]["id"],
+                    "message_id": cq["message"]["message_id"],
+                    "reply_markup": {"inline_keyboard": []},
+                })
                 print(cq["data"])
                 return
 
