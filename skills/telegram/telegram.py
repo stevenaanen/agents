@@ -5,6 +5,9 @@ Telegram connector for Claude Code workflows.
 Subcommands:
   send "text" [--keyboard '[["Label:data", ...], ...]']  → prints message_id
   wait [--message-id ID] [--timeout 300]                 → prints callback_data or exits 1
+  wait-many --message-ids ID1,ID2,... [--timeout 600]    → streams "<id> <data>" per reply;
+                                                           remaining IDs get keyboards cleared
+                                                           on timeout and are NOT printed.
 """
 import argparse
 import json
@@ -52,6 +55,14 @@ def cmd_send(token, chat_id, text, keyboard_json=None):
     print(result["result"]["message_id"])
 
 
+def clear_keyboard(token, chat_id, message_id):
+    api(token, "editMessageReplyMarkup", {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "reply_markup": {"inline_keyboard": []},
+    })
+
+
 def cmd_wait(token, message_id=None, timeout=300):
     # Flush all pending updates so we only catch callbacks that arrive after this call.
     result = api(token, "getUpdates", {"timeout": 0})
@@ -74,17 +85,51 @@ def cmd_wait(token, message_id=None, timeout=300):
                 continue
             if message_id is None or cq["message"]["message_id"] == message_id:
                 api(token, "answerCallbackQuery", {"callback_query_id": cq["id"]})
-                # Remove buttons so the user sees their tap was received
-                api(token, "editMessageReplyMarkup", {
-                    "chat_id": cq["message"]["chat"]["id"],
-                    "message_id": cq["message"]["message_id"],
-                    "reply_markup": {"inline_keyboard": []},
-                })
+                clear_keyboard(token, cq["message"]["chat"]["id"], cq["message"]["message_id"])
                 print(cq["data"])
                 return
 
     print("timeout", file=sys.stderr)
     sys.exit(1)
+
+
+def cmd_wait_many(token, chat_id, message_ids, timeout=600):
+    pending = set(message_ids)
+
+    # Flush pending updates so we only catch callbacks that arrive after this call.
+    result = api(token, "getUpdates", {"timeout": 0})
+    offset = (result["result"][-1]["update_id"] + 1) if result["result"] else 0
+
+    deadline = time.time() + timeout
+    while pending and time.time() < deadline:
+        poll_secs = min(30, int(deadline - time.time()))
+        if poll_secs <= 0:
+            break
+        result = api(token, "getUpdates", {
+            "offset": offset,
+            "timeout": poll_secs,
+            "allowed_updates": ["callback_query"],
+        })
+        for update in result["result"]:
+            offset = update["update_id"] + 1
+            cq = update.get("callback_query")
+            if not cq:
+                continue
+            mid = cq["message"]["message_id"]
+            if mid not in pending:
+                continue
+            api(token, "answerCallbackQuery", {"callback_query_id": cq["id"]})
+            clear_keyboard(token, cq["message"]["chat"]["id"], mid)
+            print(f"{mid} {cq['data']}", flush=True)
+            pending.discard(mid)
+
+    # Window closed: clear keyboards on un-answered prompts so the user
+    # can't tap them after the workflow has moved on.
+    for mid in pending:
+        try:
+            clear_keyboard(token, chat_id, mid)
+        except Exception:
+            pass
 
 
 def main():
@@ -109,12 +154,21 @@ def main():
     p_wait.add_argument("--timeout", type=int, default=300,
                         help="Seconds to wait before giving up (default 300)")
 
+    p_many = sub.add_parser("wait-many")
+    p_many.add_argument("--message-ids", required=True,
+                        help="Comma-separated message IDs to listen for")
+    p_many.add_argument("--timeout", type=int, default=600,
+                        help="Seconds to wait before giving up (default 600)")
+
     args = parser.parse_args()
 
     if args.cmd == "send":
         cmd_send(token, chat_id, args.text, args.keyboard)
     elif args.cmd == "wait":
         cmd_wait(token, args.message_id, args.timeout)
+    elif args.cmd == "wait-many":
+        ids = [int(x) for x in args.message_ids.split(",") if x.strip()]
+        cmd_wait_many(token, chat_id, ids, args.timeout)
 
 
 if __name__ == "__main__":

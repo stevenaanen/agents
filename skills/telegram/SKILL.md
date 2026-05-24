@@ -47,6 +47,23 @@ python3 skills/telegram/telegram.py wait --message-id <id> --timeout 120
 `--message-id` scopes the wait to a specific message (recommended).
 `--timeout` defaults to 300s.
 
+## Wait for many prompts at once
+
+Telegram's `getUpdates` is exclusive per bot, so you can't run multiple `wait`
+calls in parallel. Use `wait-many` instead when you've sent several prompts and
+want the user to answer them in any order:
+
+```bash
+python3 skills/telegram/telegram.py wait-many \
+  --message-ids 123,124,125 --timeout 600
+# → prints one line per reply: "<message_id> <callback_data>"
+# → on timeout: clears keyboards on un-answered prompts (no line printed)
+```
+
+Pipe its stdout into a `while read` loop to dispatch each reply as it arrives.
+Any message IDs that didn't get a reply within the window are simply absent from
+the output — the caller can treat absence as "no response".
+
 ## Typical pattern in a workflow
 
 ```bash
