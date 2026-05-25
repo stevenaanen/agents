@@ -80,29 +80,49 @@ for example in skills/*/.env.example; do
   fi
 done
 
-# ── 5. Install crontab entry ──────────────────────────────────────────────────
+# ── 5. Install LaunchAgent ────────────────────────────────────────────────────
+# launchd (not cron) because:
+#   1. cron on modern macOS can't reach the Keychain → claude CLI fails with
+#      "Not logged in". LaunchAgents run in the user session and have access.
+#   2. If the laptop is asleep at 09:00, launchd runs the job on next wake.
+#      RunAtLoad in the plist also catches full-shutdown days (run-jenius.sh
+#      has a "ran today" guard so it doesn't double-fire after a same-day reboot).
 
-info "Installing crontab..."
+info "Installing LaunchAgent..."
 
-CRON_LINE="0 9 * * * $REPO_DIR/scripts/run-jenius.sh"
-TZ_LINE="TZ=Europe/Amsterdam"
+LAUNCH_AGENT_LABEL="com.steven.jenius"
+LAUNCH_AGENT_SRC="$REPO_DIR/scripts/${LAUNCH_AGENT_LABEL}.plist"
+LAUNCH_AGENT_DST="$HOME/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
 
-# Check if entry already present
+mkdir -p "$HOME/Library/LaunchAgents"
+
+# Migrate away from the old cron entry, if present
 if crontab -l 2>/dev/null | grep -qF "run-jenius.sh"; then
-  ok "crontab entry already present"
+  crontab -l 2>/dev/null \
+    | grep -vF "run-jenius.sh" \
+    | grep -vF "TZ=Europe/Amsterdam" \
+    | crontab -
+  ok "removed stale cron entry"
+fi
+
+# Symlink the plist so repo updates propagate without re-copying
+if [[ -L "$LAUNCH_AGENT_DST" ]]; then
+  ok "LaunchAgent symlink already present"
+elif [[ -e "$LAUNCH_AGENT_DST" ]]; then
+  warn "$LAUNCH_AGENT_DST exists but is not a symlink — leaving alone"
 else
-  # Append to existing crontab, adding TZ line only if not already there
-  (
-    existing="$(crontab -l 2>/dev/null || true)"
-    if [[ -z "$existing" ]]; then
-      printf '%s\n%s\n' "$TZ_LINE" "$CRON_LINE"
-    elif echo "$existing" | grep -qF "TZ=Europe/Amsterdam"; then
-      printf '%s\n%s\n' "$existing" "$CRON_LINE"
-    else
-      printf '%s\n%s\n%s\n' "$TZ_LINE" "$existing" "$CRON_LINE"
-    fi
-  ) | crontab -
-  ok "crontab entry installed (daily 9am Amsterdam time)"
+  ln -s "$LAUNCH_AGENT_SRC" "$LAUNCH_AGENT_DST"
+  ok "LaunchAgent linked at $LAUNCH_AGENT_DST"
+fi
+
+# (Re)load so changes take effect immediately
+if launchctl print "gui/$UID/$LAUNCH_AGENT_LABEL" &>/dev/null; then
+  launchctl bootout "gui/$UID/$LAUNCH_AGENT_LABEL" 2>/dev/null || true
+fi
+if launchctl bootstrap "gui/$UID" "$LAUNCH_AGENT_DST" 2>/dev/null; then
+  ok "LaunchAgent loaded (daily 09:00 local, catches up on wake/boot)"
+else
+  warn "failed to load LaunchAgent — try: launchctl bootstrap gui/\$UID $LAUNCH_AGENT_DST"
 fi
 
 # ── 6. Log directory ──────────────────────────────────────────────────────────
