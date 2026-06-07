@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "bear": {
+      "type": "stdio",
+      "command": "/Applications/Bear.app/Contents/MacOS/bearcli",
+      "args": [
+        "mcp-server"
+      ],
+      "env": {}
+    }
+  }
+}
