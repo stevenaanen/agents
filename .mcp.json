@@ -7,6 +7,12 @@
         "mcp-server"
       ],
       "env": {}
+    },
+    "things": {
+      "command": "uvx",
+      "args": [
+        "things-mcp"
+      ]
     }
   }
 }
