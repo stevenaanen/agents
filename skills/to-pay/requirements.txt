@@ -1,0 +1,2 @@
+bunq_sdk>=1.21
+pypdf>=5.0
