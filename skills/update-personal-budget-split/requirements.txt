@@ -1,0 +1,3 @@
+# This skill reuses the sibling /to-pay skill's virtualenv, which already
+# provides this dependency. Listed here for documentation / standalone setup.
+bunq_sdk>=1.28.0
