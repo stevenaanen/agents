@@ -1,6 +1,6 @@
 ---
 name: update-personal-budget-split
-description: Rebuild the monthly personal-budget split in bunq. Deletes the existing recurring "Monthly budget" scheduled payments (with a confirmation), then recreates them from a user-supplied from/to/amount table of internal transfers — gathering money INTO the auto-sort account on the 27th and distributing OUT of it on the 28th. Use when the user says "/update-personal-budget-split", "update the budget split", "redo the monthly budget", or pastes a budget table to schedule.
+description: Reconcile the monthly personal-budget split in bunq to a user-supplied from/to/amount table of internal transfers. Diffs the desired table against the live recurring "Monthly budget" scheduled payments and applies only the delta (add missing, delete removed, change differing, leave matches alone) — gathering money INTO the auto-sort account on the 27th and distributing OUT of it on the 28th. Always shows the full delete/add/change plan and waits for explicit confirmation before any bulk write. Use when the user says "/update-personal-budget-split", "update the budget split", "redo the monthly budget", or pastes a budget table to schedule.
 metadata:
   requires:
     bins: [python3]
@@ -8,10 +8,7 @@ metadata:
 
 # /update-personal-budget-split
 
-Rebuild the monthly personal-budget split as bunq scheduled payments. Two halves:
-
-1. **Delete** every existing recurring payment whose description is exactly `Monthly budget`.
-2. **Create** fresh monthly scheduled payments from a from/to/amount table the user supplies.
+Reconcile the monthly personal-budget split (bunq scheduled payments) to a from/to/amount table the user supplies. It **diffs desired vs. live** and applies only the delta — add what's missing, delete what's been removed, change what differs, leave matches untouched — then writes nothing until the user approves the plan.
 
 All work runs through `budget_split.py`, which **reuses the sibling `/to-pay` skill's venv and bunq context** (same registered device — no second registration):
 
@@ -20,9 +17,11 @@ cd /Users/steven/git/agents/skills/update-personal-budget-split
 python3 budget_split.py <subcommand>
 ```
 
-## ⚠️ These are live, irreversible bunq changes
+## ⚠️ Live, irreversible bunq changes — plan first, then confirm
 
-Unlike `/to-pay` (which uses DraftPayments you approve in the app), scheduled-payment **create and delete take effect immediately with no in-app approval** — the API key is the authorization. So **always preview and get explicit confirmation before deleting and before creating.** Never fire either without showing the exact list first.
+Unlike `/to-pay` (which uses DraftPayments you approve in the app), scheduled-payment **create and delete take effect immediately with no in-app approval** — the API key is the authorization.
+
+**The mandatory flow is: `plan` (read-only) → show the full delete/add/change table → get the user's explicit go-ahead → only then run `delete`/`create`.** Never run the bulk writes without an approved plan. `accounts`, `list-matching`, and `plan` make no changes and are safe anytime.
 
 ## Prerequisite
 
@@ -62,35 +61,16 @@ Returns all 32-ish active accounts as JSON: `{id, type, description, iban, holde
 
 Watch for accounts that are **`PENDING_ACCEPTANCE`** (e.g. a freshly created Provisions/Depreciation): bunq rejects scheduled payments to them with *"Unable to make a payment to the chosen account."* — flag these and ask whether to target an active account instead or skip until accepted. Some names (e.g. **Depreciation**) may exist as both an active and a pending account — confirm which.
 
-### Step 1 — Delete existing "Monthly budget" payments
+### Step 1 — Resolve the table to desired entries
 
-```bash
-python3 budget_split.py list-matching            # default --description "Monthly budget"
-```
-
-Show the user a table of every match: **account (from), to_name + to_iban, amount, recurrence, start_date, next_run**. State plainly that these will be deleted and that it is immediate. Get a clear yes.
-
-On confirmation, pipe the targets (just the id pairs) to delete:
-
-```bash
-echo '[{"monetary_account_id":10834704,"schedule_payment_id":2030638}, ...]' \
-  | python3 budget_split.py delete
-```
-
-Report how many were deleted / any failures.
-
-### Step 2 — Create the new split from the table
-
-The table rows are `<from>  <to>  <amount>` (e.g. `Autosort  Tithes  € 159` means **from** Autosort **to** Tithes, €159).
-
-Build a resolved JSON array — one object per row — resolving both ends against the `accounts` output:
+The table rows are `<from>  <to>  <amount>` (e.g. `Autosort  Tithes  € 160` means **from** Autosort **to** Tithes, €160). Build a resolved JSON array — one object per row — resolving *both* ends against the `accounts` output:
 
 ```json
 [
   {
     "from_account_id": 4002682,
     "from_label": "Real estate",
-    "to_account_id": <autosort id>,
+    "to_account_id": 1983471,
     "to_label": "Autosort",
     "to_iban": "<autosort IBAN>",
     "to_name": "<autosort holder_name>",
@@ -101,22 +81,54 @@ Build a resolved JSON array — one object per row — resolving both ends again
 
 - `from_account_id` = the account the money leaves (the schedule is created *on* this account).
 - `to_account_id` + `to_iban` + `to_name` = the destination account (from its `accounts` entry: `id`, `iban`, `holder_name`).
-- `amount` = positive number, no currency symbol. `currency` defaults to EUR; `description` defaults to `Monthly budget` (keep this default so the skill stays re-runnable).
+- `amount` = positive number, no symbol. `currency` defaults to EUR; `description` defaults to `Monthly budget` — **keep the default** so reconciliation matches.
 
-**Preview first** with `--dry-run`, passing the auto-sort id:
+To avoid IBAN transcription errors with many rows, it's fine to generate this array programmatically by looking up each account's IBAN/holder by id from the `accounts` output.
+
+### Step 2 — Plan (read-only diff)
+
+Pipe the desired array to `plan` with the auto-sort id. This **makes no changes** — it diffs desired vs. the live `Monthly budget` payments:
 
 ```bash
-echo '[...]' | python3 budget_split.py create --autosort-id <autosort id> --dry-run
+echo '[...]' | python3 budget_split.py plan --autosort-id 1983471
 ```
 
-Show the returned `plan`: each row's **from_label → to_label, amount, day_of_month (27/28), direction, next_run**. This is the reconciliation step — confirm amounts and dates with the user, especially that into-auto-sort rows are on the 27th and out-of-auto-sort rows on the 28th. Watch for any `direction` containing `WARNING` (a row that touches neither side of auto-sort) and flag it.
+It returns `summary` + four lists and two ready-to-run payloads:
 
-On confirmation, run the same command **without `--dry-run`** to create them. Report created ids and any failures.
+- `unchanged` — already correct (same from→to, amount, day): **left alone**.
+- `add` — in the table, not yet in bunq → to create.
+- `change` — same from→to but amount/day differs → old deleted, new created.
+- `delete` — a live `Monthly budget` payment whose from→to is no longer in the table → to remove.
+- `execute_delete` — id pairs to feed `delete` (= `delete` + each `change` old).
+- `execute_create` — entries to feed `create` (= `add` + each `change` new).
+
+### Step 3 — Show the plan and STOP for confirmation 🔒
+
+**This is a hard gate. Do not run `delete` or `create` until the user explicitly approves.** Render the plan as a clear table:
+
+- **To delete** (account, to, amount, day)
+- **To add** (from → to, amount, day 27/28)
+- **To change** (from → to, amount old→new, day old→new)
+- **Unchanged**: just the count
+
+State the net effect (e.g. "−€81/mo, +€980/mo") and flag any `add`/`change` whose `direction` contains `WARNING` or that targets a `PENDING_ACCEPTANCE` account. Then ask for a clear go-ahead. If `add`, `change`, and `delete` are all empty, tell the user everything's already in sync and stop — nothing to do.
+
+### Step 4 — Execute (only after approval)
+
+Capture the plan JSON, then run the two payloads. Skip either if empty:
+
+```bash
+echo '<execute_delete from the plan>' | python3 budget_split.py delete
+echo '<execute_create from the plan>' | python3 budget_split.py create --autosort-id 1983471
+```
+
+Report created/deleted ids and any failures (e.g. pending-account rejections). Then re-run Step 2's `plan` to verify it converged — ideally everything is now `unchanged` (apart from rows that legitimately failed, like still-pending accounts).
 
 ---
 
 ## Notes
 
-- Re-running is safe and idempotent: Step 1 deletes all `Monthly budget` payments, Step 2 recreates from the current table. External recurring payments with other descriptions (salary, VvE, parking, etc.) are never touched.
+- **Idempotent by reconciliation:** re-running with the same table is a no-op; re-running with an edited table applies only the delta. Nothing is deleted-and-recreated unnecessarily. Payments with other descriptions (salary, VvE, parking, etc.) are never touched.
+- The diff key is **(from account, to IBAN)**; amount and day are compared as attributes. Changing an amount or moving the 27/28 day shows up as a `change`.
 - `next_run`/dates are anchored to the 27th/28th of the next month that hasn't passed, at 07:00 UTC.
-- If the user only wants one half (just delete, or just create), do that half.
+- Never run `delete`/`create` (the bulk writes) without an approved plan. `accounts`, `list-matching`, and `plan` are all read-only and safe to run anytime.

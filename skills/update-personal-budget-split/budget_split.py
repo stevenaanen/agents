@@ -188,6 +188,18 @@ def parse_bunq_dt(s):
     return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
 
 
+def norm_amount(v):
+    """Canonical 2-decimal string for comparison ('160' == '160.00')."""
+    try:
+        return f"{float(str(v).replace(',', '.').lstrip('-') or 0):.2f}"
+    except ValueError:
+        return str(v)
+
+
+def norm_iban(v):
+    return (v or "").replace(" ", "").upper()
+
+
 # ---------- commands ----------
 
 def cmd_accounts(args):
@@ -333,6 +345,129 @@ def cmd_create(args):
                      indent=2, ensure_ascii=False))
 
 
+# ---------- plan (read-only reconciliation) ----------
+
+def _existing_matching(client, uid, want):
+    """Current scheduled payments whose description == want, keyed for diffing."""
+    out = []
+    for a in active_accounts(client, uid):
+        try:
+            rows = raw_get_all(client, f"user/{uid}/monetary-account/{a['id']}/schedule-payment")
+        except Exception:
+            rows = []
+        for it in rows:
+            _, sp = first_val(it)
+            p = sp.get("payment") or {}
+            if (p.get("description") or "").strip() != want:
+                continue
+            s = sp.get("schedule") or {}
+            cpa = p.get("counterparty_alias") or {}
+            lbl = cpa.get("LabelMonetaryAccount") or cpa
+            amt = p.get("amount") or {}
+            try:
+                day = parse_bunq_dt(s.get("time_start")).day
+            except Exception:
+                day = None
+            out.append({
+                "monetary_account_id": a["id"],
+                "account": a["description"],
+                "schedule_payment_id": sp.get("id"),
+                "to_iban": norm_iban(lbl.get("iban") or lbl.get("value")),
+                "to_name": lbl.get("display_name") or lbl.get("name") or "",
+                "amount": norm_amount(amt.get("value")),
+                "day": day,
+            })
+    return out
+
+
+def cmd_plan(args):
+    """Diff desired entries (stdin) against live state. Read-only — no writes."""
+    desired = json.loads(sys.stdin.read())
+    if not isinstance(desired, list) or not desired:
+        raise SystemExit("expected non-empty JSON array on stdin")
+
+    uid, client = load_bunq()
+    want = args.description.strip()
+    existing = _existing_matching(client, uid, want)
+
+    from collections import defaultdict
+    by_key = defaultdict(list)
+    for e in existing:
+        by_key[(e["monetary_account_id"], e["to_iban"])].append(e)
+
+    add, change, unchanged = [], [], []
+    matched_ids = set()
+
+    for d in desired:
+        for k in ("from_account_id", "to_iban", "to_name", "amount"):
+            if d.get(k) in (None, ""):
+                raise SystemExit(f"missing '{k}' in desired entry: {d}")
+        day, direction = _resolve_day(d, args.autosort_id)
+        iban = norm_iban(d["to_iban"])
+        amt = norm_amount(d["amount"])
+        entry = {
+            "from_account_id": d["from_account_id"],
+            "from_label": d.get("from_label", ""),
+            "to_account_id": d.get("to_account_id"),
+            "to_label": d.get("to_label", ""),
+            "to_iban": iban,
+            "to_name": d["to_name"],
+            "amount": str(d["amount"]).lstrip("-").replace(",", "."),
+            "currency": d.get("currency", "EUR"),
+            "description": d.get("description", DEFAULT_DESCRIPTION),
+        }
+        disp = {"from_label": entry["from_label"], "to_label": entry["to_label"],
+                "to_iban": iban, "amount": amt, "day": day, "direction": direction}
+
+        cands = by_key.get((d["from_account_id"], iban), [])
+        cand = next((c for c in cands if c["schedule_payment_id"] not in matched_ids), None)
+        if cand is None:
+            add.append({**entry, **{"day": day, "direction": direction}})
+        else:
+            matched_ids.add(cand["schedule_payment_id"])
+            if cand["amount"] == amt and cand["day"] == day:
+                unchanged.append({**disp, "schedule_payment_id": cand["schedule_payment_id"]})
+            else:
+                change.append({
+                    "schedule_payment_id": cand["schedule_payment_id"],
+                    "from_label": entry["from_label"], "to_label": entry["to_label"],
+                    "to_iban": iban,
+                    "amount_old": cand["amount"], "amount_new": amt,
+                    "day_old": cand["day"], "day_new": day,
+                    "_old": {"monetary_account_id": cand["monetary_account_id"],
+                             "schedule_payment_id": cand["schedule_payment_id"]},
+                    "_new": entry,
+                })
+
+    delete = [e for e in existing if e["schedule_payment_id"] not in matched_ids]
+
+    execute_delete = (
+        [{"monetary_account_id": e["monetary_account_id"],
+          "schedule_payment_id": e["schedule_payment_id"]} for e in delete]
+        + [c["_old"] for c in change]
+    )
+    execute_create = [
+        {k: v for k, v in a.items() if k not in ("day", "direction")} for a in add
+    ] + [c["_new"] for c in change]
+
+    print(json.dumps({
+        "description": want,
+        "autosort_id": args.autosort_id,
+        "summary": {"unchanged": len(unchanged), "add": len(add),
+                    "change": len(change), "delete": len(delete)},
+        "unchanged": unchanged,
+        "add": add,
+        "change": change,
+        "delete": [{"monetary_account_id": e["monetary_account_id"],
+                    "schedule_payment_id": e["schedule_payment_id"],
+                    "account": e["account"], "to_name": e["to_name"],
+                    "to_iban": e["to_iban"], "amount": e["amount"], "day": e["day"]}
+                   for e in delete],
+        "execute_delete": execute_delete,
+        "execute_create": execute_create,
+    }, indent=2, ensure_ascii=False))
+
+
 # ---------- entrypoint ----------
 
 def main():
@@ -351,12 +486,17 @@ def main():
     p_cr.add_argument("--autosort-id", type=int, required=True)
     p_cr.add_argument("--dry-run", action="store_true")
 
+    p_pl = sub.add_parser("plan")
+    p_pl.add_argument("--autosort-id", type=int, required=True)
+    p_pl.add_argument("--description", default=DEFAULT_DESCRIPTION)
+
     args = parser.parse_args()
     {
         "accounts": cmd_accounts,
         "list-matching": cmd_list_matching,
         "delete": cmd_delete,
         "create": cmd_create,
+        "plan": cmd_plan,
     }[args.cmd](args)
 
 
