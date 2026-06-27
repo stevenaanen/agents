@@ -1,6 +1,6 @@
 ---
 name: update-personal-budget-split
-description: Reconcile the monthly personal-budget split in bunq to a user-supplied from/to/amount table of internal transfers. Diffs the desired table against the live recurring "Monthly budget" scheduled payments and applies only the delta (add missing, delete removed, change differing, leave matches alone) — gathering money INTO the auto-sort account on the 27th and distributing OUT of it on the 28th. Always shows the full delete/add/change plan and waits for explicit confirmation before any bulk write. Use when the user says "/update-personal-budget-split", "update the budget split", "redo the monthly budget", or pastes a budget table to schedule.
+description: Reconcile the monthly personal-budget split in bunq to a user-supplied from/to/amount table of internal transfers. Diffs the desired table against the live recurring "Monthly budget" scheduled payments and applies only the delta (add missing, delete removed, change differing, leave matches alone) — gathering money INTO the auto-sort account on the 27th and distributing OUT of it on the 29th. Always shows the full delete/add/change plan and waits for explicit confirmation before any bulk write. Use when the user says "/update-personal-budget-split", "update the budget split", "redo the monthly budget", or pastes a budget table to schedule.
 metadata:
   requires:
     bins: [python3]
@@ -30,9 +30,9 @@ Unlike `/to-pay` (which uses DraftPayments you approve in the app), scheduled-pa
 ## The date rule (owned by the script, not by you)
 
 - Money flowing **INTO** the auto-sort account runs on the **27th** (gather first).
-- Money flowing **OUT OF** the auto-sort account runs on the **28th** (then distribute).
+- Money flowing **OUT OF** the auto-sort account runs on the **29th** (then distribute).
 
-You only need to identify the **auto-sort account id** and pass it as `--autosort-id`. `budget_split.py create` computes the 27th/28th per row itself from the from/to account ids. Both ends of every transfer are internal bunq accounts, so resolve both.
+You only need to identify the **auto-sort account id** and pass it as `--autosort-id`. `budget_split.py create` computes the 27th/29th per row itself from the from/to account ids. Both ends of every transfer are internal bunq accounts, so resolve both.
 
 ---
 
@@ -107,7 +107,7 @@ It returns `summary` + four lists and two ready-to-run payloads:
 **This is a hard gate. Do not run `delete` or `create` until the user explicitly approves.** Render the plan as a clear table:
 
 - **To delete** (account, to, amount, day)
-- **To add** (from → to, amount, day 27/28)
+- **To add** (from → to, amount, day 27/29)
 - **To change** (from → to, amount old→new, day old→new)
 - **Unchanged**: just the count
 
@@ -129,6 +129,6 @@ Report created/deleted ids and any failures (e.g. pending-account rejections). T
 ## Notes
 
 - **Idempotent by reconciliation:** re-running with the same table is a no-op; re-running with an edited table applies only the delta. Nothing is deleted-and-recreated unnecessarily. Payments with other descriptions (salary, VvE, parking, etc.) are never touched.
-- The diff key is **(from account, to IBAN)**; amount and day are compared as attributes. Changing an amount or moving the 27/28 day shows up as a `change`.
-- `next_run`/dates are anchored to the 27th/28th of the next month that hasn't passed, at 07:00 UTC.
+- The diff key is **(from account, to IBAN)**; amount and day are compared as attributes. Changing an amount or moving the 27/29 day shows up as a `change`.
+- `next_run`/dates are anchored to the 27th/29th of the next month that hasn't passed, at 07:00 UTC.
 - Never run `delete`/`create` (the bulk writes) without an approved plan. `accounts`, `list-matching`, and `plan` are all read-only and safe to run anytime.

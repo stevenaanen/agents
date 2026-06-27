@@ -6,11 +6,11 @@ Two halves:
   2. Recreate them from a user-supplied from/to/amount table, all internal
      transfers, anchored on fixed days of the month:
         - money flowing INTO the auto-sort account  -> the 27th (gather first)
-        - money flowing OUT of the auto-sort account -> the 28th (then distribute)
+        - money flowing OUT of the auto-sort account -> the 29th (then distribute)
 
 This script is a thin, deterministic executor. Account-name fuzzy matching and
 the preview/confirmation live in SKILL.md (driven by Claude); the irreversible
-27th/28th rule lives here in code so it can't drift.
+27th/29th rule lives here in code so it can't drift.
 
 Auth/SDK are reused from the sibling /to-pay skill (same bunq device + context),
 so there is no second device registration. Override the context path with
@@ -49,7 +49,7 @@ DEFAULT_DESCRIPTION = "Monthly budget"
 DEFAULT_HOUR_UTC = 7  # 07:00 UTC — safely away from any midnight date rollover
 
 DAY_INTO_AUTOSORT = 27   # incoming to auto-sort runs first
-DAY_OUT_OF_AUTOSORT = 28  # outgoing distribution runs the next day
+DAY_OUT_OF_AUTOSORT = 29  # outgoing distribution runs two days later
 
 
 # ---------- env + bunq context ----------
@@ -273,12 +273,12 @@ def cmd_delete(args):
 
 
 def _resolve_day(entry, autosort_id):
-    """The irreversible 27th/28th rule, owned by code."""
+    """The irreversible 27th/29th rule, owned by code."""
     if entry["from_account_id"] == autosort_id:
         return DAY_OUT_OF_AUTOSORT, "out of auto-sort"
     if entry.get("to_account_id") == autosort_id:
         return DAY_INTO_AUTOSORT, "into auto-sort"
-    return DAY_OUT_OF_AUTOSORT, "WARNING: does not touch auto-sort (defaulted to 28th)"
+    return DAY_OUT_OF_AUTOSORT, "WARNING: does not touch auto-sort (defaulted to 29th)"
 
 
 def cmd_create(args):
