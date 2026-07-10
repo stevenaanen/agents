@@ -109,10 +109,10 @@ def parse_invoice(text):
                     break
             break
 
-    # New format: "# Invoice" then date line
+    # New format: "# Invoice" (EU) / "# Receipt" (Indonesia storefront) then date line
     if not invoice_date:
         for i, l in enumerate(lines):
-            if l == "# Invoice":
+            if l in ("# Invoice", "# Receipt"):
                 for j in range(i + 1, min(i + 8, len(lines))):
                     if re.match(r"^\d{1,2}\s+\w+\s+\d{4}$", lines[j]):
                         invoice_date = lines[j]
@@ -133,18 +133,28 @@ def parse_invoice(text):
 
     body = "\n".join(lines)
 
-    # Total
-    total = None
+    # Total. EU receipts are in EUR; the Indonesia storefront bills in Rupiah
+    # ("Rp 169.000", no € anywhere). total_eur stays EUR-only for backward
+    # compatibility; total/currency carry whatever the receipt actually used.
+    total_eur = None
     m = re.search(r"\bTOTAL\b\s*€\s*([\d.,]+)|\bTOTAAL\b\s*€\s*([\d.,]+)", body)
     if m:
-        total = float((m.group(1) or m.group(2)).replace(".", "").replace(",", "."))
-    if total is None:
+        total_eur = float((m.group(1) or m.group(2)).replace(".", "").replace(",", "."))
+    if total_eur is None:
         m = re.search(
             r"(?:MasterCard|VISA|Visa|American Express|Amex)\s*[•.]+\s*\d{4}[^\n]*\n+\s*€\s*([\d.,]+)",
             body,
         )
         if m:
-            total = float(m.group(1).replace(".", "").replace(",", "."))
+            total_eur = float(m.group(1).replace(".", "").replace(",", "."))
+
+    total = total_eur
+    currency = "EUR"
+    if total_eur is None:
+        m = re.search(r"\bRp\s*([\d.,]+)", body)
+        if m:
+            total = float(m.group(1).replace(".", "").replace(",", ""))
+            currency = "IDR"
 
     # Locate product block start
     start = None
@@ -172,26 +182,26 @@ def parse_invoice(text):
                 start = j
                 break
 
-    # Locate first € amount line
-    first_eur_idx = None
+    # Locate first amount line (€ on EU receipts, Rp on the Indonesia storefront)
+    first_amount_idx = None
     for i, l in enumerate(lines):
-        if re.match(r"^€\s*[\d.,]+$", l):
-            first_eur_idx = i
+        if re.match(r"^(?:€|Rp)\s*[\d.,]+$", l):
+            first_amount_idx = i
             break
-    if first_eur_idx is None:
+    if first_amount_idx is None:
         for i, l in enumerate(lines):
-            if re.search(r"€\s*\d", l) and "Inclusive" not in l and "Inclusief" not in l:
-                first_eur_idx = i
+            if re.search(r"(?:€|Rp)\s*\d", l) and "Inclusive" not in l and "Inclusief" not in l:
+                first_amount_idx = i
                 break
 
     product_lines = []
-    if start is not None and first_eur_idx is not None and start < first_eur_idx:
+    if start is not None and first_amount_idx is not None and start < first_amount_idx:
         skip_re = [
             r"^Renews\b", r"^Vernieuwt\b", r"^Inclusive of VAT", r"^Inclusief btw",
             r"^\[Report a Problem", r"^Police Surveillance Van",
             r"^Monthly$", r"^Maandelijks$", r"^Yearly$", r"^Annual$",
         ]
-        for j in range(start, first_eur_idx):
+        for j in range(start, first_amount_idx):
             l = lines[j]
             if not l:
                 continue
@@ -207,7 +217,9 @@ def parse_invoice(text):
     return {
         "invoice_date": invoice_date_iso,
         "year": year,
-        "total_eur": total,
+        "total_eur": total_eur,
+        "total": total,
+        "currency": currency,
         "service": service,
         "product_header": product_header,
         "product_detail": product_detail,
@@ -365,6 +377,8 @@ def cmd_process():
                 "service": svc,
                 "classification": cls,
                 "total_eur": parsed["total_eur"],
+                "total": parsed["total"],
+                "currency": parsed["currency"],
                 "pdf_path": str(pdf_path),
             }
         else:
@@ -374,6 +388,8 @@ def cmd_process():
                 "service": svc,
                 "classification": cls,
                 "total_eur": parsed["total_eur"],
+                "total": parsed["total"],
+                "currency": parsed["currency"],
             }
 
     save_processed(processed)
@@ -505,13 +521,22 @@ def wrap_html(body_html, parsed):
     .meta { color: #6e6e73; font-size: 11px; border-top: 1px solid #d2d2d7;
             margin-top: 32px; padding-top: 12px; }
     """
-    meta = (
-        f"Invoice date: {parsed.get('invoice_date') or 'unknown'} · "
-        f"Service: {parsed.get('service') or 'unknown'} · "
-        f"Total: €{parsed.get('total_eur'):.2f}".replace(".", ",")
-        if parsed.get("total_eur") is not None
-        else "Invoice"
-    )
+    total = parsed.get("total")
+    currency = parsed.get("currency") or "EUR"
+    if total is not None:
+        if currency == "EUR":
+            amount = f"€{total:.2f}".replace(".", ",")
+        elif currency == "IDR":
+            amount = "Rp " + f"{int(total):,}".replace(",", ".")
+        else:
+            amount = f"{total} {currency}"
+        meta = (
+            f"Invoice date: {parsed.get('invoice_date') or 'unknown'} · "
+            f"Service: {parsed.get('service') or 'unknown'} · "
+            f"Total: {amount}"
+        )
+    else:
+        meta = "Invoice"
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>{css}</style></head>
 <body>
