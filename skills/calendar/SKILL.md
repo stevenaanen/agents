@@ -20,10 +20,19 @@ Today's date and the user's timezone (Bali, UTC+8) come from the session context
 
 ```bash
 spark events --start <yyyy-MM-dd> --end <yyyy-MM-dd> --in <account:Calendar>   # read (≤31-day window)
+spark events --start <..> --end <..> --in "steven@empowr.nl:derk@empowr.nl"   # read a peer's delegated calendar (full detail)
+spark availability --start <yyyy-MM-dd> --end <yyyy-MM-dd> --attendees a@empowr.nl,b@empowr.nl   # quick mutual free/busy
 spark event create --title "..." --start <yyyy-MM-ddTHH:mm> --end <...> --calendar <account:Calendar> [--alerts 1800s] [--description "..."] [--video-conference meet] [--all-day] [--add a@b.com]
 spark event update <event-id> [--title|--start|--end|--description|--location|--add|--remove ...]
 spark event delete <event-id>
 ```
+
+- Peers' **delegated calendars** are readable via `spark events --in "steven@empowr.nl:<peer>@empowr.nl"`
+  — full titles/attendees/notes, the authoritative detail source. `spark availability` is the
+  quicker free/busy pass but can't judge movability. See reference.md → **Peer & team
+  availability** for both, the MT-vs-own-team rules, and two hard rules: **delegated peer
+  calendars are READ-ONLY** (never write to them — edit the meeting on Steven's own calendar),
+  and a peer's agenda matters **only when that person is an invitee** to what's being planned.
 
 - Date range per read is capped at **31 days** — chunk longer windows.
 - Get an event's `ID:` from `spark events` output before `update`/`delete`.
@@ -51,8 +60,18 @@ If ambiguous, ask one short question.
 2. **Read the candidate window** with `spark events` for the target calendar — and also the
    other calendars that share those hours, so conflicts across calendars are visible (e.g. a
    Pro focus block must not collide with an Empowr meeting or gym).
+   - **If the item has other attendees, check their availability too** — for the detail an MT
+     decision needs, read their delegated calendar with `spark events --in
+     "steven@empowr.nl:<peer>@empowr.nl"`; `spark availability --attendees …` is the quick
+     free/busy pass. See reference.md → **Peer & team availability**
+     for the MT-vs-own-team rules; the attendees' availability is a first-class constraint,
+     not an afterthought.
 3. **Find a reasonable slot** respecting, in priority order:
    - the ANCHOR (never overlap gym) and `[BLOCK]`/`OOO`;
+   - **the attendees' availability** — an MT member's agenda (Derk / Reinier / Robin) is a
+     binding constraint (schedule into their genuinely-free time; never over an external
+     meeting); Steven's own team (Joao / Pieter / Ed) flexes to Steven's ideal time, only
+     respect their OOO;
    - the working-hours template (right time-of-day for the category);
    - the NL overlap window if it involves the Empowr team;
    - sensible spacing (don't wedge deep work between two meetings).

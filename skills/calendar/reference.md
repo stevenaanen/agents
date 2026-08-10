@@ -68,6 +68,93 @@ a recurring instance (e.g. `[Health] Gym`, `[Plan] Day`).
 
 ---
 
+## Peer & team availability (meetings with others)
+
+When placing or moving anything that has **other attendees**, their availability is a
+first-class constraint — not just Steven's. Two tiers of colleagues, plus everyone else.
+
+**Roster (Empowr emails):**
+
+| Person | Email | Tier |
+|---|---|---|
+| Derk van Haastert | `derk@empowr.nl` | 🔴 MT — most busy |
+| Reinier de van der Schueren | `reinier@empowr.nl` | 🔴 MT — most busy |
+| Robin Meijer | `robin@empowr.nl` | 🔴 MT — most busy |
+| João Domingues | `joao@empowr.nl` | 🟢 Steven's team — flexible |
+| Pieter Hussaarts | `pieter@empowr.nl` | 🟢 Steven's team — flexible |
+| Edward Phillips | `edward@empowr.nl` | 🟢 Steven's team — flexible |
+
+### 🔴 MT (Derk, Reinier, Robin) — hardest to schedule; their agenda binds
+
+- Plan meetings into slots where they are **genuinely free**. Their calendar is the binding
+  constraint — schedule *around* it, don't book *over* it.
+- If nothing fits, you may **propose** a time that displaces only **low-value** items already
+  in their agenda: internal focus blocks, tasks, or clearly tentative things that could easily
+  be **rescheduled internally**. Always propose — never assume.
+- **External meetings are a hard no-go.** Never propose to book over or move a meeting they
+  have with someone outside the company.
+- Because free/busy alone can't tell an external meeting from a movable block, **read the
+  detail** before proposing to displace anything of theirs (see tooling below).
+
+### 🟢 Steven's own team (Joao, Pieter, Ed) — flexible
+
+- They flex to whatever Steven proposes — optimise for **Steven's ideal time**, don't
+  contort the plan around them.
+- One hard constraint: **respect their OOO / holiday days** — never book them on a day
+  they're out.
+
+### Everyone else (other colleagues, externals)
+
+- Still check their availability (`spark availability`) and avoid conflicts; treat as normal
+  — propose around them rather than over them.
+
+### When a meeting mixes tiers
+
+Satisfy the **MT member's availability first**, then slot the flexible teammate(s) around
+that. (This is exactly the Aug-2026 case that motivated the rule: given a Derk 1:1 and a
+Pieter 1:1 competing for the same afternoon, place Derk where *he's* free and move flexible
+Pieter to the leftover slot — not the reverse.)
+
+### Tooling — how to actually see a peer's availability
+
+Steven has enabled his colleagues' **delegated calendars inside Spark Desktop**, so the CLI
+can now read each peer's full agenda directly. Two tools, in order of usefulness:
+
+1. **Full detail — `spark events --in "steven@empowr.nl:<peer>@empowr.nl" --start … --end …`.**
+   Returns the peer's real events with **titles, attendees, and notes** — the authoritative
+   source for judging *what's* in their agenda (external vs internal, focus block vs meeting,
+   movable vs fixed). The delegated calendars are the ones listed under the `steven@empowr.nl`
+   account whose name is a colleague's email (`steven@empowr.nl:derk@empowr.nl`,
+   `…:reinier@empowr.nl`, `…:robin@empowr.nl`, `…:joao@empowr.nl`, `…:pieter@empowr.nl`). Run
+   `spark accounts` to see the current set.
+2. **Quick free/busy — `spark availability --attendees a@empowr.nl,b@empowr.nl --start … --end …`.**
+   Mutual free windows in Bali time (respects events marked "free", skips weekends). Handy for
+   a fast "when is everyone free?" pass, but it is **intersected with Steven's own calendar**
+   and is **free/busy only (no titles)**, so it can't judge movability. Prefer `events --in`
+   when an MT decision hinges on the detail.
+
+> 🔒 **HARD RULE — delegated peer calendars are READ-ONLY for us.** Spark lists them as
+> *read-write*, but we **only ever read them for availability**. **Never** `event
+> create/update/delete` against `steven@empowr.nl:<peer>@empowr.nl` — that would write to a
+> colleague's calendar. Treat this exactly like the Monica rule. To change a *meeting* with a
+> peer, edit the event on **Steven's own** calendar (`steven@empowr.nl:Steven @ Empowr`), which
+> notifies them as an attendee — never touch their calendar copy.
+>
+> ⚠️ **Organizer caveat:** if Steven is *not* the organizer of a meeting, moving his own copy
+> may not propagate to the other person's copy (their copy can stay at the old time → the two
+> desync). After moving any meeting with attendees, **read the peer's delegated calendar back**
+> to confirm their copy actually moved; if it didn't, flag it — the change likely needs the
+> organizer to make it.
+
+### When does a peer's calendar matter?
+
+**Only when that person is an actual invitee** to the item being planned or moved. A peer's
+agenda constrains a meeting *they're in* — it must **not** constrain Steven's solo blocks or
+meetings they aren't part of. Don't pull a colleague's calendar into scheduling decisions
+they have nothing to do with.
+
+---
+
 ## Working-hours template (Bali time, Mon–Fri)
 
 > ⚠️ Boundaries are Steven's current defaults — he flagged he wants to fine-tune them.
