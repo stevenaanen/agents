@@ -118,20 +118,43 @@ Pieter to the leftover slot — not the reverse.)
 ### Tooling — how to actually see a peer's availability
 
 Steven has enabled his colleagues' **delegated calendars inside Spark Desktop**, so the CLI
-can now read each peer's full agenda directly. Two tools, in order of usefulness:
+can read each peer's full agenda directly.
 
-1. **Full detail — `spark events --in "steven@empowr.nl:<peer>@empowr.nl" --start … --end …`.**
-   Returns the peer's real events with **titles, attendees, and notes** — the authoritative
-   source for judging *what's* in their agenda (external vs internal, focus block vs meeting,
-   movable vs fixed). The delegated calendars are the ones listed under the `steven@empowr.nl`
-   account whose name is a colleague's email (`steven@empowr.nl:derk@empowr.nl`,
-   `…:reinier@empowr.nl`, `…:robin@empowr.nl`, `…:joao@empowr.nl`, `…:pieter@empowr.nl`). Run
-   `spark accounts` to see the current set.
+> 🚨 **HARD RULE — a person's busy time lives across MANY calendars, not just their own.**
+> Reading only `…:<peer>@empowr.nl` (or only `…:Steven @ Empowr`) **silently under-reports**
+> their load. Recurring MT meetings organized by someone else and booked into a shared room
+> (e.g. **Weekly DRRS / DR / Sales-Marketing**, all hosted by **Derk**) appear **only on the
+> organizer's calendar** — they do **NOT** materialize on the attendees' synced copies, even
+> when the attendee has accepted (`yes`). This is what caused a false "free" slot once. Never
+> trust a single-calendar read for availability.
+>
+> ✅ **Do this instead — one whole-account read, then attribute busy across all calendars:**
+> `spark events --in steven@empowr.nl --start … --end …` returns **every** delegated calendar
+> at once (Derk, Reinier, Robin, Joao, Pieter + Steven's primary). A person is **BUSY** at a
+> candidate slot if *any* event on *any* of those calendars overlaps it and lists them as the
+> **calendar owner OR an accepted attendee (`yes`)** — regardless of whose calendar it sits on.
+> That merged view is the only reliable busy-map (it's what surfaces DRRS via Derk's calendar).
+>
+> 🔎 **Desync tell:** if a per-person read shows a slot free but the whole-account read shows an
+> event there with that person as attendee, the per-person copy is stale — **trust the merged
+> whole-account read.**
+
+Two tools, in order of usefulness:
+
+1. **Full detail — `spark events --in steven@empowr.nl --start … --end …` (whole account).**
+   The primary tool. Returns every calendar's real events with **titles, attendees, and notes**
+   — the authoritative source for judging *what's* in each person's agenda (external vs
+   internal, focus block vs meeting, movable vs fixed) **and** for catching organizer-hosted
+   meetings per the HARD RULE above. Narrow to one calendar (`…:<peer>@empowr.nl`) only to
+   zoom into detail *after* the merged read, never as the sole availability check. Run
+   `spark accounts` to see the current calendar set.
 2. **Quick free/busy — `spark availability --attendees a@empowr.nl,b@empowr.nl --start … --end …`.**
-   Mutual free windows in Bali time (respects events marked "free", skips weekends). Handy for
-   a fast "when is everyone free?" pass, but it is **intersected with Steven's own calendar**
-   and is **free/busy only (no titles)**, so it can't judge movability. Prefer `events --in`
-   when an MT decision hinges on the detail.
+   Free/busy only, **always intersected with Steven's own calendar**, and ignores events marked
+   "free". ⚠️ **Near-useless for finding Steven's slots:** his day is tiled wall-to-wall with
+   (movable) focus blocks, so it returns **"No free slots found" almost always** — it cannot see
+   that those blocks are movable. It also can't judge movability or show titles. Do **not** rely
+   on it to confirm a slot is open or to enumerate options; use the whole-account `events` read
+   and reason about movability yourself.
 
 > 🔒 **HARD RULE — delegated peer calendars are READ-ONLY for us.** Spark lists them as
 > *read-write*, but we **only ever read them for availability**. **Never** `event
