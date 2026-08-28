@@ -28,6 +28,14 @@ python3 skills/jenius-card/scan.py --verify   # exit 1 if anything is unprocesse
 Run the dry run first when the backlog is large, report the split to the user,
 then `--apply`. Always finish with `--verify`.
 
+Both classify modes take the **32 oldest** unprocessed emails by default
+(`DEFAULT_LIMIT`), and report how many they deferred. Every unknown becomes a
+Telegram prompt a human has to answer, so an uncapped run over a big backlog is
+unanswerable in one sitting — and this path also runs unattended from
+`scripts/run-jenius.sh`. Pass `--limit N` for a different cap, or `--limit 0`
+to take everything. A limited run always starts from the oldest, so repeated
+runs drain the backlog in date order.
+
 ## Do NOT use topic search for discovery
 
 `spark search <topic>` is capped at **the top 20 matches** (it says so in

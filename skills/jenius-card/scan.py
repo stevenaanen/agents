@@ -11,9 +11,11 @@ list mode (`--filter`, no topic argument), which is exhaustive and paginated.
   scan.py --verify   exit 1 if any transaction email since the cutoff lacks
                      the `checked` label and is not sitting in pending
 
-Both classify modes take --limit N to work through only the N oldest
-unprocessed emails, so a large backlog can be drained in sittings. --verify
-always reports the whole picture and ignores --limit.
+Both classify modes work through the N oldest unprocessed emails, defaulting
+to DEFAULT_LIMIT, so a backlog is drained in sittings and the unattended cron
+path can never fire an unbounded burst of Telegram prompts. --limit N sets a
+different cap; --limit 0 removes it. --verify always reports the whole picture
+and ignores --limit.
 """
 import json
 import os
@@ -28,6 +30,10 @@ LABEL = f"{ACCOUNT}:checked"
 FILTER = f'from:jenius_noreply@smbci.com after:{CUTOFF} subject:"Credit Card Transaction"'
 PAGE_SIZE = 200
 LIVING_EXPENSE_MAX = 200_000
+# Caps how much one run takes on. Every unknown ≥ this threshold becomes a
+# Telegram prompt a human has to answer, so an uncapped run over a large
+# backlog is unanswerable in one sitting. Override with --limit; 0 disables.
+DEFAULT_LIMIT = 32
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -118,10 +124,10 @@ def mark_checked(eid):
 
 def main():
     argv = sys.argv[1:]
-    limit = None
+    limit = DEFAULT_LIMIT
     if "--limit" in argv:
         i = argv.index("--limit")
-        limit = int(argv[i + 1])
+        limit = int(argv[i + 1]) or None
         del argv[i : i + 2]
     mode = argv[0] if argv else ""
 
