@@ -23,13 +23,18 @@ expenses so the pending file stays clean after each review run.
 
 Read `pending-jenius-transactions.json`. If empty, output "Nothing to review." and stop.
 
+Each entry carries a `currency` field — usually `IDR`, but Jenius bills some
+foreign merchants in their own currency. Render the prompt in the entry's own
+currency; never assume IDR. Entries written before this field existed have no
+`currency` key — treat those as `IDR`.
+
 For each entry, send a Telegram prompt and wait up to 5 minutes for a tap:
 
 ```bash
 MSG_ID=$(python3 skills/telegram/telegram.py send \
   "*Transaction review* [current]/[count]
 🏪 [merchant]
-💰 IDR [amount with thousand separators]
+💰 [currency] [amount with thousand separators]
 📅 [date]" \
   --keyboard '[["💰 Reimburse:reimburse", "⏭ Skip:skip", "✅ Always skip:always"]]')
 
@@ -52,6 +57,12 @@ spark action attachLabel <email_id> --folder "ssaanen@gmail.com:checked"
 spark action archive <email_id>
 ```
 
+**Telegram Markdown:** merchant names arrive with characters that Telegram's
+legacy Markdown treats as entity markers — `BKG*HOTEL AT BOOKING.C` and
+`XDT*MEGATIX` each open a bold run that never closes, and the send fails with
+HTTP 400. Replace `*` and `_` in any merchant name before interpolating it
+into a message.
+
 **Merchant normalization for "always ignore":** strip trailing location noise
 (city, region, country code). `"SURF BREW TABANAN KOT. ID"` → `"SURF BREW"`.
 Use the shortest prefix that uniquely identifies the merchant.
@@ -59,8 +70,10 @@ Use the shortest prefix that uniquely identifies the merchant.
 After processing all entries, write the updated pending array back (containing
 only timeout entries, if any).
 
-Then read `reimbursements.json` to get the total count and send a closing
-Telegram message (no keyboard):
+Then read `reimbursements.json` and count only entries **without** a
+`reimbursed_at` key — entries carrying one were settled in an earlier payout
+and are history, not outstanding. Send a closing Telegram message (no
+keyboard):
 
 ```
 ✅ *Review complete*
