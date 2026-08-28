@@ -10,6 +10,10 @@ list mode (`--filter`, no topic argument), which is exhaustive and paginated.
   scan.py --apply    label+archive the auto set, write unknowns to pending
   scan.py --verify   exit 1 if any transaction email since the cutoff lacks
                      the `checked` label and is not sitting in pending
+
+Both classify modes take --limit N to work through only the N oldest
+unprocessed emails, so a large backlog can be drained in sittings. --verify
+always reports the whole picture and ignores --limit.
 """
 import json
 import os
@@ -30,7 +34,9 @@ DATA = os.path.join(HERE, "data")
 PENDING = os.path.join(DATA, "pending-jenius-transactions.json")
 TRUSTED = os.path.join(HERE, "trusted-merchants.json")
 
-ROW_RE = re.compile(r"^\s{2}(\d{4,})\s+\S+@\S+\s", re.M)
+ROW_RE = re.compile(
+    r"^\s{2}(\d{4,})\s+\S+@\S+\s+.*?(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s", re.M
+)
 FOOTER_RE = re.compile(r"Page (\d+) of (\d+) \((\d+) total emails\)")
 
 
@@ -40,15 +46,15 @@ def sh(cmd):
 
 
 def list_ids(scope=None):
-    """All message IDs matching FILTER, following pagination to the last page."""
-    ids, page, pages = [], 1, 1
+    """{id: received date} for FILTER, following pagination to the last page."""
+    ids, page, pages = {}, 1, 1
     while page <= pages:
         scope_arg = f' --in "{scope}"' if scope else ""
         out, _ = sh(
             f"spark search --filter '{FILTER}'{scope_arg}"
             f" --page-size {PAGE_SIZE} --page {page}"
         )
-        ids += ROW_RE.findall(out)
+        ids.update(ROW_RE.findall(out))
         m = FOOTER_RE.search(out)
         if not m:
             raise SystemExit(
@@ -57,12 +63,12 @@ def list_ids(scope=None):
             )
         pages, total = int(m.group(2)), int(m.group(3))
         page += 1
-    if len(set(ids)) != total:
+    if len(ids) != total:
         raise SystemExit(
-            f"coverage mismatch (scope={scope!r}): parsed {len(set(ids))} ids "
+            f"coverage mismatch (scope={scope!r}): parsed {len(ids)} ids "
             f"but spark reported {total} total — refusing to proceed."
         )
-    return set(ids)
+    return ids
 
 
 def fetch(eid):
@@ -111,20 +117,34 @@ def mark_checked(eid):
 
 
 def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    argv = sys.argv[1:]
+    limit = None
+    if "--limit" in argv:
+        i = argv.index("--limit")
+        limit = int(argv[i + 1])
+        del argv[i : i + 2]
+    mode = argv[0] if argv else ""
+
     pending = json.load(open(PENDING)) if os.path.exists(PENDING) else []
     pending_ids = {p["email_id"] for p in pending}
 
     all_ids = list_ids()
-    checked_ids = list_ids(scope=LABEL)
-    todo = sorted(all_ids - checked_ids - pending_ids)
+    checked = set(list_ids(scope=LABEL))
+    outstanding = set(all_ids) - checked - pending_ids
+    # Oldest first, so a limited run always drains the top of the backlog.
+    todo = sorted(outstanding, key=lambda i: (all_ids[i], i))
+    deferred = 0
+    if limit is not None and len(todo) > limit:
+        deferred = len(todo) - limit
+        todo = todo[:limit]
 
     if mode == "--verify":
         print(
             f"{len(all_ids)} transaction emails since {CUTOFF}: "
-            f"{len(all_ids & checked_ids)} checked, {len(pending_ids)} pending review, "
-            f"{len(todo)} unprocessed"
+            f"{len(set(all_ids) & checked)} checked, {len(pending_ids)} pending review, "
+            f"{len(outstanding)} unprocessed"
         )
+        todo = sorted(outstanding, key=lambda i: (all_ids[i], i))
         if todo:
             print("UNPROCESSED: " + " ".join(todo))
         return 1 if todo else 0
@@ -141,8 +161,9 @@ def main():
 
     plan = {
         "total_since_cutoff": len(all_ids),
-        "already_checked": len(all_ids & checked_ids),
+        "already_checked": len(set(all_ids) & checked),
         "already_pending": len(pending_ids),
+        "deferred_to_next_run": deferred,
         "auto_checked": auto,
         "declined": declined,
         "needs_review": unknown,
@@ -167,6 +188,8 @@ def main():
         print("LABEL FAILED (left for next run): " + " ".join(failed))
     if unparseable:
         print("UNPARSEABLE (left for next run): " + " ".join(unparseable))
+    if deferred:
+        print(f"{deferred} older-backlog email(s) deferred to a later run")
     return 0
 
 
