@@ -23,13 +23,18 @@ expenses so the pending file stays clean after each review run.
 
 Read `pending-jenius-transactions.json`. If empty, output "Nothing to review." and stop.
 
+Each entry carries a `currency` field — usually `IDR`, but Jenius bills some
+foreign merchants in their own currency. Render the prompt in the entry's own
+currency; never assume IDR. Entries written before this field existed have no
+`currency` key — treat those as `IDR`.
+
 For each entry, send a Telegram prompt and wait up to 5 minutes for a tap:
 
 ```bash
 MSG_ID=$(python3 skills/telegram/telegram.py send \
   "*Transaction review* [current]/[count]
 🏪 [merchant]
-💰 IDR [amount with thousand separators]
+💰 [currency] [amount with thousand separators]
 📅 [date]" \
   --keyboard '[["💰 Reimburse:reimburse", "⏭ Skip:skip", "✅ Always skip:always"]]')
 
