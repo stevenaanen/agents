@@ -2,8 +2,10 @@
 # Resolve a podcast episode page (or direct audio URL) to its audio file and
 # download it.
 #
-# Usage: podcast-download.sh [--output-dir DIR] <url>
-#   --output-dir DIR  Where the audio lands (default: ~/Downloads)
+# Usage: podcast-download.sh [--output-dir DIR] [--topic TEXT] <url>
+#   --output-dir DIR  Where the audio lands. Defaults to this session's
+#                     folder, ~/Downloads/YYYY-MM-DD-<topic>/
+#   --topic TEXT      Topic for the session folder name (default: "podcast")
 #
 # Accepts a direct audio URL or an episode page (pca.st and most web players
 # embed the enclosure URL in the HTML).
@@ -13,13 +15,16 @@
 
 set -euo pipefail
 
-OUTPUT_DIR="$HOME/Downloads"
+HERE="${0:a:h}"
+OUTPUT_DIR=""
+TOPIC="podcast"
 URL=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-    -h|--help)    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --topic)      TOPIC="$2"; shift 2 ;;
+    -h|--help)    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)           echo "Unknown option: $1" >&2; exit 1 ;;
     *)            URL="$1"; shift ;;
   esac
@@ -27,6 +32,8 @@ done
 
 [[ -z "$URL" ]] && { echo "Usage: podcast-download.sh [--output-dir DIR] <url>" >&2; exit 1; }
 
+# Keep output grouped in a dated session folder rather than loose in ~/Downloads.
+[[ -z "$OUTPUT_DIR" ]] && OUTPUT_DIR="$("$HERE/session-dir.sh" "$TOPIC")"
 mkdir -p "$OUTPUT_DIR"
 
 echo "Resolving $URL ..." >&2

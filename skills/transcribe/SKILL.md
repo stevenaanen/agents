@@ -15,6 +15,12 @@ Two independent scripts. Use either alone or chained.
 Both write progress to stderr and the resulting path to stdout, so the result
 is captured with `$(...)` — no output parsing.
 
+Audio and transcript land together in a dated session folder under
+`~/Downloads` (see *Output location* in `CLAUDE.md`). Pass `--topic` describing
+the episode so the folder is findable later — e.g. `--topic "worship sermon"`
+gives `~/Downloads/2026-08-31-worship-sermon/`. Without it you get a generic
+`-podcast` / `-transcript` folder, which is tidy but vague.
+
 ## Steps
 
 Skip step 1 if the user already has a local file; skip step 2 if they only
@@ -23,7 +29,7 @@ want the audio.
 **1. Download.**
 
 ```bash
-bash scripts/podcast-download.sh "<url>"
+bash scripts/podcast-download.sh --topic "<topic>" "<url>"
 ```
 
 **2. Transcribe.** Run in the background — a full episode takes several minutes.
@@ -32,10 +38,12 @@ bash scripts/podcast-download.sh "<url>"
 bash scripts/transcribe.sh --language <code> "<file>"
 ```
 
-Or chained in one go:
+The transcript joins the audio's session folder automatically when the audio is
+already in one, so the chained form needs `--topic` only once:
 
 ```bash
-bash scripts/transcribe.sh --language en "$(bash scripts/podcast-download.sh '<url>')"
+bash scripts/transcribe.sh --language en \
+  "$(bash scripts/podcast-download.sh --topic 'worship sermon' '<url>')"
 ```
 
 Pass `--language` whenever the language is known or stated (`en`, `nl`, ...).
@@ -44,7 +52,7 @@ seconds and applies that guess to the whole file, which fails on recordings
 that open with music or a foreign-language intro.
 
 Other options: `--model` (default `large-v3`; don't go smaller for non-English),
-`--format txt|srt|vtt|json`, `--output-dir` (default: next to the audio file).
+`--format txt|srt|vtt|json`, `--output-dir` to override the session folder.
 
 **3. Summarize with a cheap model.** Transcripts are long and summarizing them
 is easy work, so delegate to Haiku instead of spending main-context tokens:

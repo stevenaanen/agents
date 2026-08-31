@@ -6,7 +6,10 @@
 #   --language CODE   Force language, e.g. nl, en (default: auto-detect)
 #   --model NAME      Whisper model (default: large-v3)
 #   --format FMT      txt | srt | vtt | json (default: txt)
-#   --output-dir DIR  Where the transcript lands (default: next to the file)
+#   --output-dir DIR  Where the transcript lands. Defaults to the audio file's
+#                     own dated session folder if it is in one, otherwise this
+#                     session's folder, ~/Downloads/YYYY-MM-DD-<topic>/
+#   --topic TEXT      Topic for the session folder name (default: "transcript")
 #
 # Prints the transcript path to stdout; progress goes to stderr, so it
 # composes:  transcribe.sh "$(podcast-download.sh <url>)"
@@ -17,10 +20,12 @@
 
 set -euo pipefail
 
+HERE="${0:a:h}"
 LANGUAGE=""
 MODEL="large-v3"
 FORMAT="txt"
 OUTPUT_DIR=""
+TOPIC="transcript"
 FILE=""
 
 while [[ $# -gt 0 ]]; do
@@ -29,7 +34,8 @@ while [[ $# -gt 0 ]]; do
     --model)      MODEL="$2"; shift 2 ;;
     --format)     FORMAT="$2"; shift 2 ;;
     --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-    -h|--help)    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --topic)      TOPIC="$2"; shift 2 ;;
+    -h|--help)    sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)           echo "Unknown option: $1" >&2; exit 1 ;;
     *)            FILE="$1"; shift ;;
   esac
@@ -39,8 +45,16 @@ done
 [[ -f "$FILE" ]] || { echo "No such file: $FILE" >&2; exit 1; }
 command -v uvx >/dev/null || { echo "uvx not found (brew install uv)" >&2; exit 1; }
 
-# Default to writing the transcript alongside the audio.
-[[ -z "$OUTPUT_DIR" ]] && OUTPUT_DIR="${FILE:a:h}"
+# Join the audio's dated session folder if it already lives in one, otherwise
+# start (or reuse) one so output stays grouped rather than loose in ~/Downloads.
+if [[ -z "$OUTPUT_DIR" ]]; then
+  PARENT="${FILE:a:h}"
+  if [[ "$PARENT" == "$HOME/Downloads/"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-* ]]; then
+    OUTPUT_DIR="$PARENT"
+  else
+    OUTPUT_DIR="$("$HERE/session-dir.sh" "$TOPIC")"
+  fi
+fi
 mkdir -p "$OUTPUT_DIR"
 
 # VAD trims silence, which suppresses Whisper's tendency to hallucinate text
