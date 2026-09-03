@@ -13,6 +13,10 @@
       "args": [
         "things-mcp"
       ]
+    },
+    "pocketcasts": {
+      "type": "http",
+      "url": "https://mcp.pocketcasts.com"
     }
   }
 }
